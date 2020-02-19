@@ -12,11 +12,11 @@ import math
 
 # from keras.utils import plot_model
 
-from AutoML.constant import Constant
-from AutoML.bayesian import IncrementalGaussianProcess, edit_distance
-from AutoML.generator import DefaultClassifierGenerator
-from AutoML.net_transformer import transform, default_transform
-from AutoML.utils import ModelTrainer, pickle_to_file, pickle_from_file
+from basenear.constant import Constant
+from basenear.bayesian import IncrementalGaussianProcess, edit_distance
+from basenear.generator import DefaultClassifierGenerator
+from basenear.net_transformer import transform, default_transform
+from basenear.utils import ModelTrainer, pickle_to_file, pickle_from_file
 
 import multiprocessing
 

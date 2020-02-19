@@ -1,0 +1,1 @@
+from basenear.search import BayesianSearcher

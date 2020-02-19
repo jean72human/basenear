@@ -7,7 +7,7 @@ import torch
 
 from torch.utils.data import DataLoader
 
-from AutoML.constant import Constant
+from basenear.constant import Constant
 
 
 def lr_schedule(epoch):

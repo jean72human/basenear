@@ -1,7 +1,7 @@
 import numpy as np
 
-from AutoML.constant import Constant
-from AutoML.layers import StubConv, StubBatchNormalization, StubDropout, StubDense, StubReLU
+from basenear.constant import Constant
+from basenear.layers import StubConv, StubBatchNormalization, StubDropout, StubDense, StubReLU
 
 NOISE_RATIO = 1e-4
 

@@ -2,10 +2,10 @@ from copy import deepcopy
 from operator import itemgetter
 from random import randint, randrange, sample
 
-from AutoML.graph import NetworkDescriptor
+from basenear.graph import NetworkDescriptor
 
-from AutoML.constant import Constant
-from AutoML.layers import is_layer
+from basenear.constant import Constant
+from basenear.layers import is_layer
 
 
 def to_wider_graph(graph):

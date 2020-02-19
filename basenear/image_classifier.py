@@ -13,10 +13,10 @@ from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
 
-from AutoML.constant import Constant
-from AutoML.search import BayesianSearcher, train
-from AutoML.utils import ensure_dir, has_file, pickle_from_file, pickle_to_file
-from AutoML.classifier import Classifier
+from basenear.constant import Constant
+from basenear.search import BayesianSearcher, train
+from basenear.utils import ensure_dir, has_file, pickle_from_file, pickle_to_file
+from basenear.classifier import Classifier
 
 
 def _validate(x_train, y_train):

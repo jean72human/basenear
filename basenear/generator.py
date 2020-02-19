@@ -1,6 +1,6 @@
-from AutoML.constant import Constant
-from AutoML.graph import Graph
-from AutoML.layers import StubBatchNormalization, StubConv, StubDropout, StubPooling, StubDense, StubFlatten, \
+from basenear.constant import Constant
+from basenear.graph import Graph
+from basenear.layers import StubBatchNormalization, StubConv, StubDropout, StubPooling, StubDense, StubFlatten, \
     StubReLU, StubSoftmax
 
 

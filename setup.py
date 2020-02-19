@@ -4,7 +4,7 @@ with open("README.md", "r") as f:
     long_description = f.read()
 
 setuptools.setup(
-    name="AutoML",
+    name="basenear",
     version="0.1",
     author="Gbetondji Dovonon",
     author_email="",
