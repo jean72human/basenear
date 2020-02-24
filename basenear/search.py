@@ -29,21 +29,21 @@ def contain(descriptors, target_descriptor):
 
 
 class BayesianSearcher:
-    """Base class of all searcher classes.
-    This class is the base class of all searcher classes,
+    """Base class of all searcher class
+    This class is the base class of all searcher class,
     every searcher class can override its search function
-    to implements its strategy.
+    to implements its strategy
     Attributes:
-        n_classes: Number of classes in the traget classification task.
+        n_classes: number of classification
         input_shape: Arbitrary, although all dimensions in the input shaped must be fixed.
-            Use the keyword argument `input_shape` (tuple of integers, does not include the batch axis)
+            Use the keyword argument input_shape (tuple of integers, does not include the batch axis)
             when using this layer as the first layer in a model.
-        verbose: Verbosity mode.
+        verbose: verbosity mode
         history: A list that stores the performance of model. Each element in it is a dictionary of 'model_id',
             'loss', and 'accuracy'.
         path: A string. The path to the directory for saving the searcher.
         model_count: An integer. the total number of neural networks in the current searcher.
-        descriptors: A dictionary of all the neural network architectures searched.
+        descriptors: A dictionary of all the neural networks architectures searched.
         trainer_args: A dictionary. The params for the constructor of ModelTrainer.
         default_model_len: An integer. Number of convolutional layers in the initial architecture.
         default_model_width: An integer. The number of filters in each layer in the initial architecture.
@@ -63,7 +63,7 @@ class BayesianSearcher:
                  beta=Constant.BETA,
                  kernel_lambda=Constant.KERNEL_LAMBDA,
                  t_min=None):
-        """Initialize the BayesianSearcher.
+        """
         Args:
             n_classes: An integer, the number of classes.
             input_shape: A tuple. e.g. (28, 28, 1).
@@ -90,8 +90,6 @@ class BayesianSearcher:
         self.default_model_width = default_model_width
         if 'max_iter_num' not in self.trainer_args:
             self.trainer_args['max_iter_num'] = Constant.SEARCH_MAX_ITER
-            
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         self.gpr = IncrementalGaussianProcess(kernel_lambda)
         self.search_tree = SearchTree()
@@ -247,8 +245,6 @@ class BayesianSearcher:
             print(target_graph.operation_history)
         for args in target_graph.operation_history:
             getattr(nm_graph, args[0])(*list(args[1:]))
-            
-        #self.beta *= 1.1 ####### TEST
         return nm_graph, father_id
 
     def acq(self, graph):
