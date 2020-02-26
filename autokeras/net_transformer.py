@@ -2,16 +2,22 @@ from copy import deepcopy
 from operator import itemgetter
 from random import randint, randrange, sample
 
-from basenear.graph import NetworkDescriptor
+from autokeras.graph import NetworkDescriptor
 
-from basenear.constant import Constant
-from basenear.layers import is_layer
+from autokeras.constant import Constant
+from autokeras.layers import is_layer, layer_width
 
 
 def to_wider_graph(graph):
     weighted_layer_ids = graph.wide_layer_ids()
-    n_wider_layer = randint(1, len(weighted_layer_ids))
-    wider_layers = sample(weighted_layer_ids, n_wider_layer)
+    weighted_layer_ids = list(filter(lambda x: layer_width(graph.layer_list[x]) * 2 <= Constant.MAX_MODEL_WIDTH,
+                                     weighted_layer_ids))
+
+    if len(weighted_layer_ids) == 0:
+        return None
+    # n_wider_layer = randint(1, len(weighted_layer_ids))
+    # wider_layers = sample(weighted_layer_ids, n_wider_layer)
+    wider_layers = sample(weighted_layer_ids, 1)
 
     for layer_id in wider_layers:
         layer = graph.layer_list[layer_id]
@@ -41,8 +47,9 @@ def to_skip_connection_graph(graph):
 
     if len(valid_connection) < 1:
         return graph
-    n_skip_connection = randint(1, len(valid_connection))
-    for index_a, index_b, skip_type in sample(valid_connection, n_skip_connection):
+    # n_skip_connection = randint(1, len(valid_connection))
+    # for index_a, index_b, skip_type in sample(valid_connection, n_skip_connection):
+    for index_a, index_b, skip_type in sample(valid_connection, 1):
         a_id = weighted_layer_ids[index_a]
         b_id = weighted_layer_ids[index_b]
         if skip_type == NetworkDescriptor.ADD_CONNECT:
@@ -54,13 +61,17 @@ def to_skip_connection_graph(graph):
 
 def to_deeper_graph(graph):
     weighted_layer_ids = graph.deep_layer_ids()
-    n_deeper_layer = randint(1, len(weighted_layer_ids))
-    deeper_layer_ids = sample(weighted_layer_ids, n_deeper_layer)
+    if len(weighted_layer_ids) >= Constant.MAX_MODEL_DEPTH:
+        return None
+
+    deeper_layer_ids = sample(weighted_layer_ids, 1)
+    # n_deeper_layer = randint(1, len(weighted_layer_ids))
+    # deeper_layer_ids = sample(weighted_layer_ids, n_deeper_layer)
 
     for layer_id in deeper_layer_ids:
         layer = graph.layer_list[layer_id]
         if is_layer(layer, 'Conv'):
-            graph.to_conv_deeper_model(layer_id, randint(1, 2) * 2 + 1)
+            graph.to_conv_deeper_model(layer_id, 3)
         else:
             graph.to_dense_deeper_model(layer_id)
     return graph
@@ -84,6 +95,7 @@ def transform(graph):
             graphs.append(to_wider_graph(deepcopy(graph)))
         elif a == 2:
             graphs.append(to_skip_connection_graph(deepcopy(graph)))
+    graphs = list(filter(lambda x: x, graphs))
     return list(filter(lambda x: legal_graph(x), graphs))
 
 
@@ -91,9 +103,9 @@ def default_transform(graph):
     graph = deepcopy(graph)
     graph.to_conv_deeper_model(1, 3)
     graph.to_conv_deeper_model(1, 3)
-    graph.to_conv_deeper_model(6, 3)
-    graph.to_conv_deeper_model(11, 3)
-    graph.to_add_skip_model(1, 19)
-    graph.to_add_skip_model(19, 27)
-    graph.to_add_skip_model(27, 31)
+    graph.to_conv_deeper_model(5, 3)
+    graph.to_conv_deeper_model(9, 3)
+    graph.to_add_skip_model(1, 18)
+    graph.to_add_skip_model(18, 24)
+    graph.to_add_skip_model(24, 27)
     return [graph]

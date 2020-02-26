@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from keras import layers
 
+
 class StubLayer:
     def __init__(self, input_node=None, output_node=None):
         self.input = input_node
@@ -226,7 +227,7 @@ class TorchFlatten(nn.Module):
         return input_tensor.view(input_tensor.size(0), -1)
 
 
-def KerasDropout(layer, rate):
+def keras_dropout(layer, rate):
     input_dim = len(layer.input.shape)
     if input_dim == 2:
         return layers.SpatialDropout1D(rate)
@@ -266,7 +267,7 @@ def to_real_layer(layer):
 
 def to_real_keras_layer(layer):
     if is_layer(layer, 'Dense'):
-        return layers.Dense(layer.units, input_shape=(layer.input_units, ))
+        return layers.Dense(layer.units, input_shape=(layer.input_units,))
     if is_layer(layer, 'Conv'):
         return layers.Conv2D(layer.filters,
                              layer.kernel_size,
@@ -281,7 +282,7 @@ def to_real_keras_layer(layer):
     if is_layer(layer, 'Add'):
         return layers.Add()
     if is_layer(layer, 'Dropout'):
-        return KerasDropout(layer, layer.rate)
+        return keras_dropout(layer, layer.rate)
     if is_layer(layer, 'ReLU'):
         return layers.Activation('relu')
     if is_layer(layer, 'Softmax'):

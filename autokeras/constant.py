@@ -1,6 +1,4 @@
 class Constant:
-    DEFAULT_SAVE_PATH = '/tmp/autokeras/'
-
     # Data
 
     VALIDATION_SET_SIZE = 0.08333
@@ -8,13 +6,12 @@ class Constant:
     # Searcher
 
     MAX_MODEL_NUM = 1000
-    #BETA = 2.576
-    BETA = 0
-    KERNEL_LAMBDA = 1.0
+    BETA = 2.576
+    KERNEL_LAMBDA = 0.1
     T_MIN = 0.0001
     N_NEIGHBOURS = 8
-    # T_MIN = 0.8
-    # N_NEIGHBOURS = 1
+    MAX_MODEL_WIDTH = 1024
+    MAX_MODEL_DEPTH = 100
 
     # Model Defaults
 
@@ -27,10 +24,10 @@ class Constant:
 
     # ModelTrainer
 
-    DATA_AUGMENTATION = False
-    MAX_ITER_NUM = 200
+    DATA_AUGMENTATION = True
+    MAX_ITER_NUM = 50
     MIN_LOSS_DEC = 1e-4
-    MAX_NO_IMPROVEMENT_NUM = 3
-    MAX_BATCH_SIZE = 256
+    MAX_NO_IMPROVEMENT_NUM = 2
+    MAX_BATCH_SIZE = 128
     LIMIT_MEMORY = False
-    SEARCH_MAX_ITER = 200
+    SEARCH_MAX_ITER = 50
