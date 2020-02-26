@@ -11,7 +11,7 @@ class Constant:
     T_MIN = 0.0001
     N_NEIGHBOURS = 8
     MAX_MODEL_WIDTH = 1024
-    MAX_MODEL_DEPTH = 100
+    MAX_MODEL_DEPTH = 30
 
     # Model Defaults
 
@@ -25,9 +25,9 @@ class Constant:
     # ModelTrainer
 
     DATA_AUGMENTATION = True
-    MAX_ITER_NUM = 50
+    MAX_ITER_NUM = 200
     MIN_LOSS_DEC = 1e-4
-    MAX_NO_IMPROVEMENT_NUM = 2
+    MAX_NO_IMPROVEMENT_NUM = 5
     MAX_BATCH_SIZE = 128
     LIMIT_MEMORY = False
-    SEARCH_MAX_ITER = 50
+    SEARCH_MAX_ITER = 200
