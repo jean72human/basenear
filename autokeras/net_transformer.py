@@ -1,27 +1,21 @@
 from copy import deepcopy
-from operator import itemgetter
-from random import randint, randrange, sample
+from random import randrange, sample
 
-from autokeras.graph import NetworkDescriptor
+from autokeras.nn.graph import NetworkDescriptor
 
 from autokeras.constant import Constant
-from autokeras.layers import is_layer, layer_width
+from autokeras.nn.layers import is_layer, StubDense, get_dropout_class, StubReLU, get_conv_class, \
+    get_batch_norm_class, get_pooling_class, LayerType
 
 
 def to_wider_graph(graph):
     weighted_layer_ids = graph.wide_layer_ids()
-    weighted_layer_ids = list(filter(lambda x: layer_width(graph.layer_list[x]) * 2 <= Constant.MAX_MODEL_WIDTH,
-                                     weighted_layer_ids))
-
-    if len(weighted_layer_ids) == 0:
-        return None
-    # n_wider_layer = randint(1, len(weighted_layer_ids))
-    # wider_layers = sample(weighted_layer_ids, n_wider_layer)
+    weighted_layer_ids = list(filter(lambda x: graph.layer_list[x].output.shape[-1], weighted_layer_ids))
     wider_layers = sample(weighted_layer_ids, 1)
 
     for layer_id in wider_layers:
         layer = graph.layer_list[layer_id]
-        if is_layer(layer, 'Conv'):
+        if is_layer(layer, LayerType.CONV):
             n_add = layer.filters
         else:
             n_add = layer.units
@@ -33,22 +27,14 @@ def to_wider_graph(graph):
 def to_skip_connection_graph(graph):
     # The last conv layer cannot be widen since wider operator cannot be done over the two sides of flatten.
     weighted_layer_ids = graph.skip_connection_layer_ids()
-    descriptor = graph.extract_descriptor()
-    sorted_skips = sorted(descriptor.skip_connections, key=itemgetter(2, 0, 1))
-    p = 0
     valid_connection = []
     for skip_type in sorted([NetworkDescriptor.ADD_CONNECT, NetworkDescriptor.CONCAT_CONNECT]):
         for index_a in range(len(weighted_layer_ids)):
             for index_b in range(len(weighted_layer_ids))[index_a + 1:]:
-                if p < len(sorted_skips) and sorted_skips[p] == (index_a + 1, index_b + 1, skip_type):
-                    p += 1
-                else:
-                    valid_connection.append((index_a, index_b, skip_type))
+                valid_connection.append((index_a, index_b, skip_type))
 
     if len(valid_connection) < 1:
         return graph
-    # n_skip_connection = randint(1, len(valid_connection))
-    # for index_a, index_b, skip_type in sample(valid_connection, n_skip_connection):
     for index_a, index_b, skip_type in sample(valid_connection, 1):
         a_id = weighted_layer_ids[index_a]
         b_id = weighted_layer_ids[index_b]
@@ -59,53 +45,76 @@ def to_skip_connection_graph(graph):
     return graph
 
 
+def create_new_layer(layer, n_dim):
+    input_shape = layer.output.shape
+    dense_deeper_classes = [StubDense, get_dropout_class(n_dim), StubReLU]
+    conv_deeper_classes = [get_conv_class(n_dim), get_batch_norm_class(n_dim), StubReLU]
+    if is_layer(layer, LayerType.RELU):
+        conv_deeper_classes = [get_conv_class(n_dim), get_batch_norm_class(n_dim)]
+        dense_deeper_classes = [StubDense, get_dropout_class(n_dim)]
+    elif is_layer(layer, LayerType.DROPOUT):
+        dense_deeper_classes = [StubDense, StubReLU]
+    elif is_layer(layer, LayerType.BATCH_NORM):
+        conv_deeper_classes = [get_conv_class(n_dim), StubReLU]
+
+    if len(input_shape) == 1:
+        # It is in the dense layer part.
+        layer_class = sample(dense_deeper_classes, 1)[0]
+    else:
+        # It is in the conv layer part.
+        layer_class = sample(conv_deeper_classes, 1)[0]
+
+    if layer_class == StubDense:
+        new_layer = StubDense(input_shape[0], input_shape[0])
+
+    elif layer_class == get_dropout_class(n_dim):
+        new_layer = layer_class(Constant.DENSE_DROPOUT_RATE)
+
+    elif layer_class == get_conv_class(n_dim):
+        new_layer = layer_class(input_shape[-1], input_shape[-1], sample((1, 3, 5), 1)[0], stride=1)
+
+    elif layer_class == get_batch_norm_class(n_dim):
+        new_layer = layer_class(input_shape[-1])
+
+    elif layer_class == get_pooling_class(n_dim):
+        new_layer = layer_class(sample((1, 3, 5), 1)[0])
+
+    else:
+        new_layer = layer_class()
+
+    return new_layer
+
+
 def to_deeper_graph(graph):
     weighted_layer_ids = graph.deep_layer_ids()
-    if len(weighted_layer_ids) >= Constant.MAX_MODEL_DEPTH:
+    if len(weighted_layer_ids) >= Constant.MAX_LAYERS:
         return None
 
     deeper_layer_ids = sample(weighted_layer_ids, 1)
-    # n_deeper_layer = randint(1, len(weighted_layer_ids))
-    # deeper_layer_ids = sample(weighted_layer_ids, n_deeper_layer)
 
     for layer_id in deeper_layer_ids:
         layer = graph.layer_list[layer_id]
-        if is_layer(layer, 'Conv'):
-            graph.to_conv_deeper_model(layer_id, 3)
-        else:
-            graph.to_dense_deeper_model(layer_id)
+        new_layer = create_new_layer(layer, graph.n_dim)
+        graph.to_deeper_model(layer_id, new_layer)
     return graph
-
-
-def legal_graph(graph):
-    descriptor = graph.extract_descriptor()
-    skips = descriptor.skip_connections
-    if len(skips) != len(set(skips)):
-        return False
-    return True
 
 
 def transform(graph):
     graphs = []
-    for i in range(Constant.N_NEIGHBOURS):
+    for i in range(Constant.N_NEIGHBOURS * 2):
         a = randrange(3)
+        temp_graph = None
         if a == 0:
-            graphs.append(to_deeper_graph(deepcopy(graph)))
+            temp_graph = to_deeper_graph(deepcopy(graph))
         elif a == 1:
-            graphs.append(to_wider_graph(deepcopy(graph)))
+            temp_graph = to_wider_graph(deepcopy(graph))
         elif a == 2:
-            graphs.append(to_skip_connection_graph(deepcopy(graph)))
-    graphs = list(filter(lambda x: x, graphs))
-    return list(filter(lambda x: legal_graph(x), graphs))
+            temp_graph = to_skip_connection_graph(deepcopy(graph))
 
+        if temp_graph is not None and temp_graph.size() <= Constant.MAX_MODEL_SIZE:
+            graphs.append(temp_graph)
 
-def default_transform(graph):
-    graph = deepcopy(graph)
-    graph.to_conv_deeper_model(1, 3)
-    graph.to_conv_deeper_model(1, 3)
-    graph.to_conv_deeper_model(5, 3)
-    graph.to_conv_deeper_model(9, 3)
-    graph.to_add_skip_model(1, 18)
-    graph.to_add_skip_model(18, 24)
-    graph.to_add_skip_model(24, 27)
-    return [graph]
+        if len(graphs) >= Constant.N_NEIGHBOURS:
+            break
+
+    return graphs

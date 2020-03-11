@@ -1,23 +1,50 @@
 import random
 import time
-import warnings
 from copy import deepcopy
 from functools import total_ordering
 from queue import PriorityQueue
-
+import multiprocessing as mp
 import numpy as np
 import math
-from scipy.linalg import cholesky, cho_solve, solve_triangular
-from scipy.optimize import linear_sum_assignment
 
+from scipy.linalg import cholesky, cho_solve, solve_triangular, LinAlgError
+from scipy.optimize import linear_sum_assignment
+from sklearn.metrics.pairwise import rbf_kernel
+
+from autokeras.constant import Constant
 from autokeras.net_transformer import transform
+from autokeras.nn.layers import is_layer, LayerType
 
 
 def layer_distance(a, b):
-    return abs(a - b) * 1.0 / max(a, b)
+    """The distance between two layers."""
+    if type(a) != type(b):
+        return 1.0
+    if is_layer(a, LayerType.CONV):
+        att_diff = [(a.filters, b.filters),
+                    (a.kernel_size, b.kernel_size),
+                    (a.stride, b.stride)]
+        return attribute_difference(att_diff)
+    if is_layer(a, LayerType.POOL):
+        att_diff = [(a.padding, b.padding),
+                    (a.kernel_size, b.kernel_size),
+                    (a.stride, b.stride)]
+        return attribute_difference(att_diff)
+    return 0.0
+
+
+def attribute_difference(att_diff):
+    ret = 0
+    for a_value, b_value in att_diff:
+        if max(a_value, b_value) == 0:
+            ret += 0
+        else:
+            ret += abs(a_value - b_value) * 1.0 / max(a_value, b_value)
+    return ret * 1.0 / len(att_diff)
 
 
 def layers_distance(list_a, list_b):
+    """The distance between the layers of two neural networks."""
     len_a = len(list_a)
     len_b = len(list_b)
     f = np.zeros((len_a + 1, len_b + 1))
@@ -33,6 +60,7 @@ def layers_distance(list_a, list_b):
 
 
 def skip_connection_distance(a, b):
+    """The distance between two skip-connections."""
     if a[2] != b[2]:
         return 1.0
     len_a = abs(a[1] - a[0])
@@ -41,6 +69,7 @@ def skip_connection_distance(a, b):
 
 
 def skip_connections_distance(list_a, list_b):
+    """The distance between the skip-connections of two neural networks."""
     distance_matrix = np.zeros((len(list_a), len(list_b)))
     for i, a in enumerate(list_a):
         for j, b in enumerate(list_b):
@@ -48,60 +77,81 @@ def skip_connections_distance(list_a, list_b):
     return distance_matrix[linear_sum_assignment(distance_matrix)].sum() + abs(len(list_a) - len(list_b))
 
 
-def edit_distance(x, y, kernel_lambda):
-    ret = 0
-    ret += layers_distance(x.conv_widths, y.conv_widths)
-    ret += layers_distance(x.dense_widths, y.dense_widths)
-    ret += kernel_lambda * skip_connections_distance(x.skip_connections, y.skip_connections)
+def edit_distance(x, y):
+    """The distance between two neural networks.
+    Args:
+        x: An instance of NetworkDescriptor.
+        y: An instance of NetworkDescriptor
+
+    Returns:
+        The edit-distance between x and y.
+    """
+
+    ret = layers_distance(x.layers, y.layers)
+    ret += Constant.KERNEL_LAMBDA * skip_connections_distance(x.skip_connections, y.skip_connections)
     return ret
 
 
 class IncrementalGaussianProcess:
-    def __init__(self, kernel_lambda):
+    """Gaussian process regressor.
+
+    Attributes:
+        alpha: A hyperparameter.
+    """
+
+    def __init__(self):
         self.alpha = 1e-10
-        self._k_matrix = None
         self._distance_matrix = None
         self._x = None
         self._y = None
         self._first_fitted = False
         self._l_matrix = None
         self._alpha_vector = None
-        self.edit_distance_matrix = edit_distance_matrix
-        self.kernel_lambda = kernel_lambda
 
     @property
     def kernel_matrix(self):
         return self._distance_matrix
 
     def fit(self, train_x, train_y):
+        """ Fit the regressor with more data.
+
+        Args:
+            train_x: A list of NetworkDescriptor.
+            train_y: A list of metric values.
+
+        """
         if self.first_fitted:
             self.incremental_fit(train_x, train_y)
         else:
             self.first_fit(train_x, train_y)
 
     def incremental_fit(self, train_x, train_y):
+        """ Incrementally fit the regressor. """
         if not self._first_fitted:
             raise ValueError("The first_fit function needs to be called first.")
 
         train_x, train_y = np.array(train_x), np.array(train_y)
 
         # Incrementally compute K
-        up_right_k = self.edit_distance_matrix(self.kernel_lambda, self._x, train_x)
+        up_right_k = edit_distance_matrix(self._x, train_x)
         down_left_k = np.transpose(up_right_k)
-        down_right_k = self.edit_distance_matrix(self.kernel_lambda, train_x)
+        down_right_k = edit_distance_matrix(train_x)
         up_k = np.concatenate((self._distance_matrix, up_right_k), axis=1)
         down_k = np.concatenate((down_left_k, down_right_k), axis=1)
-        self._distance_matrix = np.concatenate((up_k, down_k), axis=0)
-        self._distance_matrix = bourgain_embedding_matrix(self._distance_matrix)
-        self._k_matrix = 1.0 / np.exp(self._distance_matrix)
-        diagonal = np.diag_indices_from(self._k_matrix)
+        temp_distance_matrix = np.concatenate((up_k, down_k), axis=0)
+        k_matrix = bourgain_embedding_matrix(temp_distance_matrix)
+        diagonal = np.diag_indices_from(k_matrix)
         diagonal = (diagonal[0][-len(train_x):], diagonal[1][-len(train_x):])
-        self._k_matrix[diagonal] += self.alpha
+        k_matrix[diagonal] += self.alpha
+
+        try:
+            self._l_matrix = cholesky(k_matrix, lower=True)  # Line 2
+        except LinAlgError:
+            return self
 
         self._x = np.concatenate((self._x, train_x), axis=0)
         self._y = np.concatenate((self._y, train_y), axis=0)
-
-        self._l_matrix = cholesky(self._k_matrix, lower=True)  # Line 2
+        self._distance_matrix = temp_distance_matrix
 
         self._alpha_vector = cho_solve((self._l_matrix, True), self._y)  # Line 3
 
@@ -112,17 +162,17 @@ class IncrementalGaussianProcess:
         return self._first_fitted
 
     def first_fit(self, train_x, train_y):
+        """ Fit the regressor for the first time. """
         train_x, train_y = np.array(train_x), np.array(train_y)
 
         self._x = np.copy(train_x)
         self._y = np.copy(train_y)
 
-        self._distance_matrix = self.edit_distance_matrix(self.kernel_lambda, self._x)
-        self._distance_matrix = bourgain_embedding_matrix(self._distance_matrix)
-        self._k_matrix = 1.0 / np.exp(self._distance_matrix)
-        self._k_matrix[np.diag_indices_from(self._k_matrix)] += self.alpha
+        self._distance_matrix = edit_distance_matrix(self._x)
+        k_matrix = bourgain_embedding_matrix(self._distance_matrix)
+        k_matrix[np.diag_indices_from(k_matrix)] += self.alpha
 
-        self._l_matrix = cholesky(self._k_matrix, lower=True)  # Line 2
+        self._l_matrix = cholesky(k_matrix, lower=True)  # Line 2
 
         self._alpha_vector = cho_solve((self._l_matrix, True), self._y)  # Line 3
 
@@ -130,7 +180,17 @@ class IncrementalGaussianProcess:
         return self
 
     def predict(self, train_x):
-        k_trans = 1.0 / np.exp(self.edit_distance_matrix(self.kernel_lambda, train_x, self._x))
+        """Predict the result.
+
+        Args:
+            train_x: A list of NetworkDescriptor.
+
+        Returns:
+            y_mean: The predicted mean.
+            y_std: The predicted standard deviation.
+
+        """
+        k_trans = np.exp(-np.power(edit_distance_matrix(train_x, self._x), 2))
         y_mean = k_trans.dot(self._alpha_vector)  # Line 4 (y_mean = f_star)
 
         # compute inverse K_inv of K based on its Cholesky
@@ -145,13 +205,20 @@ class IncrementalGaussianProcess:
         # numerical issues. If yes: set the variance to 0.
         y_var_negative = y_var < 0
         if np.any(y_var_negative):
-            warnings.warn("Predicted variances smaller than 0. "
-                          "Setting those variances to 0.")
             y_var[y_var_negative] = 0.0
         return y_mean, np.sqrt(y_var)
 
 
-def edit_distance_matrix(kernel_lambda, train_x, train_y=None):
+def edit_distance_matrix(train_x, train_y=None):
+    """Calculate the edit distance.
+
+    Args:
+        train_x: A list of neural architectures.
+        train_y: A list of neural architectures.
+
+    Returns:
+        An edit-distance matrix.
+    """
     if train_y is None:
         ret = np.zeros((train_x.shape[0], train_x.shape[0]))
         for x_index, x in enumerate(train_x):
@@ -159,24 +226,34 @@ def edit_distance_matrix(kernel_lambda, train_x, train_y=None):
                 if x_index == y_index:
                     ret[x_index][y_index] = 0
                 elif x_index < y_index:
-                    ret[x_index][y_index] = edit_distance(x, y, kernel_lambda)
+                    ret[x_index][y_index] = edit_distance(x, y)
                 else:
                     ret[x_index][y_index] = ret[y_index][x_index]
         return ret
     ret = np.zeros((train_x.shape[0], train_y.shape[0]))
     for x_index, x in enumerate(train_x):
         for y_index, y in enumerate(train_y):
-            ret[x_index][y_index] = edit_distance(x, y, kernel_lambda)
+            ret[x_index][y_index] = edit_distance(x, y)
     return ret
 
 
 def vector_distance(a, b):
+    """The Euclidean distance between two vectors."""
     a = np.array(a)
     b = np.array(b)
     return np.linalg.norm(a - b)
 
 
 def bourgain_embedding_matrix(distance_matrix):
+    """Use Bourgain algorithm to embed the neural architectures based on their edit-distance.
+
+    Args:
+        distance_matrix: A matrix of edit-distances.
+
+    Returns:
+        A matrix of distances after embedding.
+
+    """
     distance_matrix = np.array(distance_matrix)
     n = len(distance_matrix)
     if n == 1:
@@ -197,29 +274,52 @@ def bourgain_embedding_matrix(distance_matrix):
                     distort_elements.append([d])
                 else:
                     distort_elements[j].append(d)
-    distort_matrix = np.zeros((n, n))
-    for i in range(n):
-        for j in range(i + 1, n):
-            distort_matrix[i][j] = distort_matrix[j][i] = vector_distance(distort_elements[i], distort_elements[j])
-    return np.array(distort_matrix)
+    return rbf_kernel(distort_elements, distort_elements)
 
 
 class BayesianOptimizer:
+    """ A Bayesian optimizer for neural architectures.
+
+    Attributes:
+        searcher: The Searcher which is calling the Bayesian optimizer.
+        t_min: The minimum temperature for simulated annealing.
+        metric: An instance of the Metric subclasses.
+        gpr: A GaussianProcessRegressor for bayesian optimization.
+        beta: The beta in acquisition function. (refer to our paper)
+        search_tree: The network morphism search tree.
     """
 
-    gpr: A GaussianProcessRegressor for bayesian optimization.
-    """
-    def __init__(self, searcher, t_min, metric, kernel_lambda, beta):
+    def __init__(self, searcher, t_min, metric, beta=None):
         self.searcher = searcher
         self.t_min = t_min
         self.metric = metric
-        self.gpr = IncrementalGaussianProcess(kernel_lambda)
-        self.beta = beta
+        self.gpr = IncrementalGaussianProcess()
+        self.beta = beta if beta is not None else Constant.BETA
+        self.search_tree = SearchTree()
 
     def fit(self, x_queue, y_queue):
+        """ Fit the optimizer with new architectures and performances.
+
+        Args:
+            x_queue: A list of NetworkDescriptor.
+            y_queue: A list of metric values.
+
+        """
         self.gpr.fit(x_queue, y_queue)
 
-    def optimize_acq(self, model_ids, descriptors, timeout):
+    def generate(self, descriptors, timeout, sync_message=None):
+        """Generate new architecture.
+
+        Args:
+            descriptors: All the searched neural architectures.
+            timeout: An integer. The time limit in seconds.
+            sync_message: the Queue for multiprocessing return value.
+
+        Returns:
+            graph: An instance of Graph. A morphed neural network with weights.
+            father_id: The father node ID in the search tree.
+        """
+        model_ids = self.search_tree.adj_list.keys()
         start_time = time.time()
         target_graph = None
         father_id = None
@@ -246,7 +346,9 @@ class BayesianOptimizer:
         alpha = 0.9
         opt_acq = self._get_init_opt_acq_value()
         remaining_time = timeout
-        while not pq.empty() and t > t_min and remaining_time > 0:
+        while not pq.empty() and remaining_time > 0 and t > t_min:
+            if isinstance(sync_message, type(mp.Queue)) and sync_message.qsize() != 0:
+                break
             elem = pq.get()
             if self.metric.higher_better():
                 temp_exp = min((elem.metric_value - opt_acq) / t, 1.0)
@@ -296,9 +398,14 @@ class BayesianOptimizer:
             return True
         return False
 
+    def add_child(self, father_id, model_id):
+        self.search_tree.add_child(father_id, model_id)
+
 
 @total_ordering
 class Elem:
+    """Elements to be sorted according to metric value."""
+
     def __init__(self, metric_value, father_id, graph):
         self.father_id = father_id
         self.graph = graph
@@ -312,12 +419,43 @@ class Elem:
 
 
 class ReverseElem(Elem):
+    """Elements to be reversely sorted according to metric value."""
+
     def __lt__(self, other):
         return self.metric_value > other.metric_value
 
 
 def contain(descriptors, target_descriptor):
+    """Check if the target descriptor is in the descriptors."""
     for descriptor in descriptors:
-        if edit_distance(descriptor, target_descriptor, 1) < 1e-5:
+        if edit_distance(descriptor, target_descriptor) < 1e-5:
             return True
     return False
+
+
+class SearchTree:
+    """The network morphism search tree."""
+
+    def __init__(self):
+        self.root = None
+        self.adj_list = {}
+
+    def add_child(self, u, v):
+        if u == -1:
+            self.root = v
+            self.adj_list[v] = []
+            return
+        if v not in self.adj_list[u]:
+            self.adj_list[u].append(v)
+        if v not in self.adj_list:
+            self.adj_list[v] = []
+
+    def get_dict(self, u=None):
+        """ A recursive function to return the content of the tree in a dict."""
+        if u is None:
+            return self.get_dict(self.root)
+        children = []
+        for v in self.adj_list[u]:
+            children.append(self.get_dict(v))
+        ret = {'name': u, 'children': children}
+        return ret
