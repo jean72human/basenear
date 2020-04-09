@@ -174,24 +174,41 @@ def assert_search_space(search_space):
 
 
 
+#def verbose_print(new_father_id, new_graph, new_model_id):
+#    """Print information about the operation performed on father model to obtain current model and father's id."""
+#    cell_size = [24, 49]
+#    logging.info('New Model Id - ' + str(new_model_id))
+#    header = ['Father Model ID', 'Added Operation']
+#    line = '|'.join(str(x).center(cell_size[i]) for i, x in enumerate(header))
+#    logging.info('\n' + '+' + '-' * len(line) + '+')
+#    logging.info('|' + line + '|')
+#    logging.info('+' + '-' * len(line) + '+')
+#    for i in range(len(new_graph.operation_history)):
+#        if i == len(new_graph.operation_history) // 2:
+#            r = [str(new_father_id), ' '.join(str(item) for item in new_graph.operation_history[i])]
+#        else:
+#            r = [' ', ' '.join(str(item) for item in new_graph.operation_history[i])]
+#        line = '|'.join(str(x).center(cell_size[i]) for i, x in enumerate(r))
+#        logging.info('|' + line + '|')
+#    logging.info('+' + '-' * len(line) + '+')
+
 def verbose_print(new_father_id, new_graph, new_model_id):
     """Print information about the operation performed on father model to obtain current model and father's id."""
     cell_size = [24, 49]
-    logging.info('New Model Id - ' + str(new_model_id))
+    print('New Model Id - ' + str(new_model_id))
     header = ['Father Model ID', 'Added Operation']
     line = '|'.join(str(x).center(cell_size[i]) for i, x in enumerate(header))
-    logging.info('\n' + '+' + '-' * len(line) + '+')
-    logging.info('|' + line + '|')
-    logging.info('+' + '-' * len(line) + '+')
+    print('\n' + '+' + '-' * len(line) + '+')
+    print('|' + line + '|')
+    print('+' + '-' * len(line) + '+')
     for i in range(len(new_graph.operation_history)):
         if i == len(new_graph.operation_history) // 2:
             r = [str(new_father_id), ' '.join(str(item) for item in new_graph.operation_history[i])]
         else:
             r = [' ', ' '.join(str(item) for item in new_graph.operation_history[i])]
         line = '|'.join(str(x).center(cell_size[i]) for i, x in enumerate(r))
-        logging.info('|' + line + '|')
-    logging.info('+' + '-' * len(line) + '+')
-
+        print('|' + line + '|')
+    print('+' + '-' * len(line) + '+')
 
 
 def validate_xy(x_train, y_train):

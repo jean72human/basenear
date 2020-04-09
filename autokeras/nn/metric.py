@@ -30,6 +30,7 @@ class Accuracy(Metric):
     def compute(cls, prediction, target):
         prediction = list(map(lambda x: x.argmax(), prediction))
         target = list(target)
+        #target = list(map(lambda x: x.argmax(), target))
         return cls.evaluate(prediction, target)
 
     @classmethod

@@ -11,6 +11,7 @@ class Constant:
     BETA = 2.576
     KERNEL_LAMBDA = 1.0
     T_MIN = 0.0001
+    #T_MIN = 0.000000000001
     N_NEIGHBOURS = 8
     MAX_MODEL_SIZE = (1 << 25)
     MAX_LAYER_WIDTH = 4096
@@ -39,13 +40,13 @@ class Constant:
 
     # ModelTrainer
 
-    DATA_AUGMENTATION = True
-    MAX_ITER_NUM = 200
+    DATA_AUGMENTATION = False
+    MAX_ITER_NUM = 2
     MIN_LOSS_DEC = 1e-4
     MAX_NO_IMPROVEMENT_NUM = 5
-    MAX_BATCH_SIZE = 128
+    MAX_BATCH_SIZE = 64
     LIMIT_MEMORY = False
-    SEARCH_MAX_ITER = 200
+    SEARCH_MAX_ITER = 2
 
     # text preprocessor
 

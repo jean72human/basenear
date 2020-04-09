@@ -379,12 +379,89 @@ class BayesianOptimizer:
         for args in target_graph.operation_history:
             getattr(nm_graph, args[0])(*list(args[1:]))
         return nm_graph, father_id
+    
+    def generate_from_std(self, descriptors, timeout, sync_message=None):
+        """Generate new architecture.
+
+        Args:
+            descriptors: All the searched neural architectures.
+            timeout: An integer. The time limit in seconds.
+            sync_message: the Queue for multiprocessing return value.
+
+        Returns:
+            graph: An instance of Graph. A morphed neural network with weights.
+            father_id: The father node ID in the search tree.
+        """
+        model_ids = self.search_tree.adj_list.keys()
+        start_time = time.time()
+        target_graph = None
+        father_id = None
+        descriptors = deepcopy(descriptors)
+        elem_class = Elem
+        if self.metric.higher_better():
+            elem_class = ReverseElem
+
+        # Initialize the priority queue.
+        pq = PriorityQueue()
+        temp_list = []
+        for model_id in model_ids:
+            metric_value = self.searcher.get_metric_value_by_id(model_id)
+            temp_list.append((metric_value, model_id))
+        temp_list = sorted(temp_list)
+        for metric_value, model_id in temp_list:
+            graph = self.searcher.load_model_by_id(model_id)
+            graph.clear_operation_history()
+            graph.clear_weights()
+            pq.put(elem_class(metric_value, model_id, graph))
+
+        t = 1.0
+        t_min = self.t_min
+        alpha = 0.9
+        opt_acq = self._get_init_opt_acq_value()
+        remaining_time = timeout
+        while not pq.empty() and remaining_time > 0 and t > t_min:
+            if isinstance(sync_message, type(mp.Queue)) and sync_message.qsize() != 0:
+                break
+            elem = pq.get()
+            if self.metric.higher_better():
+                temp_exp = min((elem.metric_value - opt_acq) / t, 1.0)
+            else:
+                temp_exp = min((opt_acq - elem.metric_value) / t, 1.0)
+            ap = math.exp(temp_exp)
+            if ap >= random.uniform(0, 1):
+                for temp_graph in transform(elem.graph):
+                    if contain(descriptors, temp_graph.extract_descriptor()):
+                        continue
+
+                    temp_acq_value = self.std(temp_graph)
+                    pq.put(elem_class(temp_acq_value, elem.father_id, temp_graph))
+                    descriptors.append(temp_graph.extract_descriptor())
+                    if self._accept_new_acq_value(opt_acq, temp_acq_value):
+                        opt_acq = temp_acq_value
+                        father_id = elem.father_id
+                        target_graph = deepcopy(temp_graph)
+            t *= alpha
+            remaining_time = timeout - (time.time() - start_time)
+
+        if remaining_time < 0:
+            raise TimeoutError
+        # Did not found a not duplicated architecture
+        if father_id is None:
+            return None, None
+        nm_graph = self.searcher.load_model_by_id(father_id)
+        for args in target_graph.operation_history:
+            getattr(nm_graph, args[0])(*list(args[1:]))
+        return nm_graph, father_id
 
     def acq(self, graph):
         mean, std = self.gpr.predict(np.array([graph.extract_descriptor()]))
         if self.metric.higher_better():
             return mean + self.beta * std
         return mean - self.beta * std
+    
+    def std(self, graph):
+        _, std = self.gpr.predict(np.array([graph.extract_descriptor()]))
+        return std
 
     def _get_init_opt_acq_value(self):
         if self.metric.higher_better():
