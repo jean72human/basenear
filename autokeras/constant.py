@@ -41,12 +41,12 @@ class Constant:
     # ModelTrainer
 
     DATA_AUGMENTATION = False
-    MAX_ITER_NUM = 2
+    MAX_ITER_NUM = 200
     MIN_LOSS_DEC = 1e-4
     MAX_NO_IMPROVEMENT_NUM = 5
-    MAX_BATCH_SIZE = 64
+    MAX_BATCH_SIZE = 256
     LIMIT_MEMORY = False
-    SEARCH_MAX_ITER = 2
+    SEARCH_MAX_ITER = 200
 
     # text preprocessor
 

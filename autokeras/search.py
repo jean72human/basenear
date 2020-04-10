@@ -7,11 +7,7 @@ import time
 from datetime import datetime
 from abc import abstractmethod
 from random import randrange
-from multiprocessing import Process
-from multiprocessing import Pool, Queue
-
 import torch
-import torch.multiprocessing as mp
 
 from autokeras.bayesian import BayesianOptimizer, SearchTree, contain
 from autokeras.greedy import GreedyOptimizer
@@ -19,7 +15,6 @@ from autokeras.constant import Constant
 from autokeras.nn.model_trainer import ModelTrainer
 from autokeras.net_transformer import transform
 from autokeras.utils import pickle_to_file, pickle_from_file, verbose_print, get_system, assert_search_space
-
 
 
 
@@ -71,6 +66,7 @@ class Searcher:
             default_model_len: An integer. Number of convolutional layers in the initial architecture.
             default_model_width: An integer. The number of filters in each layer in the initial architecture.
         """
+
         if trainer_args is None:
             trainer_args = {}
         self.n_classes = n_output_node
@@ -149,10 +145,11 @@ class Searcher:
             test_data: An instance of Dataloader.
             timeout: An integer, time limit in seconds.
         """
+        ctx = torch.multiprocessing.get_context("spawn")
         torch.cuda.empty_cache()
         if not self.history:
             self.init_search()
-        mpq = Queue(self.n_parralel * 85)
+        mpq = ctx.Queue(self.n_parralel * 85)
         self._timeout = time.time() + timeout if timeout is not None else sys.maxsize
         self.trainer_args['timeout'] = timeout
         # Start the new process for training.
@@ -175,8 +172,8 @@ class Searcher:
                 print('|' + 'Training model {}'.format(model_id).center(46) + '|')
                 print('+' + '-' * 46 + '+')
 
-            #self.sp_search(graph, other_info, model_id, train_data, test_data)
-            p = Process(target=self.sp_search, args=(graph, other_info, model_id, train_data, test_data, mpq))
+            #self.sp_search(graph, other_info, model_id, train_data, test_data,mpq)
+            p = ctx.Process(target=self.sp_search, args=(graph, other_info, model_id, train_data, test_data, mpq))
             p.start()
             processes.append(p)
 
