@@ -458,10 +458,17 @@ class BayesianOptimizer:
         if self.metric.higher_better():
             return mean + self.beta * std
         return mean - self.beta * std
+
+    def get_mean(self, graph):
+        mean, _ = self.gpr.predict(np.array([graph.extract_descriptor()]))
+        return mean 
     
     def std(self, graph):
         _, std = self.gpr.predict(np.array([graph.extract_descriptor()]))
         return std
+
+    def set_beta(self, beta):
+        self.beta = beta
 
     def _get_init_opt_acq_value(self):
         if self.metric.higher_better():

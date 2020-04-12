@@ -9,7 +9,8 @@ import os
 import time
 
 from autokeras.constant import Constant
-from autokeras.search import BayesianSearcher, GreedySearcher, ParralelSearcher, train
+from autokeras.search import BayesianSearcher, GreedySearcher, train
+from autokeras.search import GPBUCBSearcher as ParralelSearcher
 
 from autokeras.utils import pickle_to_file, rand_temp_folder_generator, ensure_dir
 from autokeras.nn.generator import CnnGenerator, MlpGenerator, ResNetGenerator, DenseNetGenerator

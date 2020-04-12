@@ -337,7 +337,7 @@ class BayesianSearcher(Searcher):
         self.optimizer.fit([graph.extract_descriptor()], [metric_value])
         self.optimizer.add_child(father_id, model_id)
         
-class ParralelSearcher(Searcher):
+class GPUCBPESearcher(Searcher):
     """ Class to search for neural architectures using Bayesian search strategy.
 
     Attribute:
@@ -349,7 +349,7 @@ class ParralelSearcher(Searcher):
                  generators, verbose, trainer_args=None,
                  default_model_len=None, default_model_width=None,
                  t_min=None, n_parralel=1):
-        super(ParralelSearcher, self).__init__(n_output_node, input_shape,
+        super(GPUCBPESearcher, self).__init__(n_output_node, input_shape,
                                                path, metric, loss,
                                                generators, verbose,
                                                trainer_args,
@@ -412,6 +412,81 @@ class ParralelSearcher(Searcher):
         self.optimizer.fit([graph.extract_descriptor()], [metric_value])
         self.optimizer.add_child(father_id, model_id)
 
+class GPBUCBSearcher(Searcher):
+    """ Class to search for neural architectures using Bayesian search strategy.
+
+    Attribute:
+        optimizer: An instance of BayesianOptimizer.
+        t_min: A float. The minimum temperature during simulated annealing.
+    """
+
+    def __init__(self, n_output_node, input_shape, path, metric, loss,
+                 generators, verbose, trainer_args=None,
+                 default_model_len=None, default_model_width=None,
+                 t_min=None, n_parralel=1):
+        super(GPBUCBSearcher, self).__init__(n_output_node, input_shape,
+                                               path, metric, loss,
+                                               generators, verbose,
+                                               trainer_args,
+                                               default_model_len,
+                                               default_model_width,
+                                               n_parralel)
+        if t_min is None:
+            t_min = Constant.T_MIN
+        self.optimizer = BayesianOptimizer(self, t_min, metric)
+        self.batch_op = None
+        
+        
+    def generate(self, multiprocessing_queue):
+        """Generate the next neural architecture.
+
+        Args:
+            multiprocessing_queue: the Queue for multiprocessing return value.
+
+        Returns:
+            list of 2-element tuples: generated_graph and other_info,
+            for bayesian searcher the length of list is 1.
+            generated_graph: An instance of Graph.
+            other_info: Anything to be saved in the training queue together with the architecture.
+
+        """
+        returns = []
+        self.batch_op = deepcopy(self.optimizer)
+        to_be_added = max(self.n_parralel - len(self.training_queue),0)
+        first_was_generated = False
+        
+        while len(returns) < to_be_added:
+            if not first_was_generated:
+                remaining_time = self._timeout - time.time()
+                generated_graph, new_father_id = self.optimizer.generate(self.descriptors,
+                                                                         remaining_time, multiprocessing_queue)
+
+            else:
+                generated_graph, new_father_id = self.batch_op.generate(self.descriptors,
+                                                                     remaining_time, multiprocessing_queue)  
+            
+            if new_father_id is None:
+                    new_father_id = 0
+                    generated_graph = self.generators[0](self.n_classes, self.input_shape).generate(self.default_model_len, self.default_model_width)
+            mu = self.batch_op.get_mean(generated_graph)
+            self.batch_op.fit([generated_graph.extract_descriptor()], list(mu))
+            returns.append((generated_graph, new_father_id))
+          
+        return returns
+
+    def update(self, other_info, model_id, graph, metric_value):
+        """ Update the controller with evaluation result of a neural architecture.
+
+        Args:
+            other_info: Anything. In our case it is the father ID in the search tree.
+            model_id: An integer.
+            graph: An instance of Graph. The trained neural architecture.
+            metric_value: The final evaluated metric value.
+        """
+        father_id = other_info
+        self.optimizer.fit([graph.extract_descriptor()], [metric_value])
+        self.optimizer.add_child(father_id, model_id)
+
 
 class GreedySearcher(Searcher):
     """ Class to search for neural architectures using Greedy search strategy.
@@ -445,6 +520,7 @@ class GreedySearcher(Searcher):
         remaining_time = self._timeout - time.time()
         results = self.optimizer.generate(self.descriptors, remaining_time,
                                           multiprocessing_queue)
+        
         if not results:
             new_father_id = 0
             generated_graph = self.generators[0](self.n_classes, self.input_shape). \
