@@ -40,9 +40,10 @@ class ModelTrainerBase(abc.ABC):
                  verbose=False,
                  device=None):
         if device:
-            self.device = device
+            self.device = device 
         else:
-            self.device = get_device()
+            self.device = get_device() 
+        self.device = self.device + ":" + str(torch.cuda.current_device())
         self.metric = metric
         self.verbose = verbose
         self.loss_function = loss_function
@@ -84,15 +85,15 @@ class ModelTrainer(ModelTrainerBase):
     def __init__(self, model, path, **kwargs):
         super().__init__(**kwargs)
         self.model = model
-        if torch.cuda.device_count() > 1:
-            self.model = torch.nn.DataParallel(self.model)
+        #if torch.cuda.device_count() > 1:
+        #    self.model = torch.nn.DataParallel(self.model)
         self.model.to(self.device)
         self.optimizer = None
         self.early_stop = None
         self.scheduler = None
         self.current_epoch = 0
         self.current_metric_value = 0
-        self.temp_model_path = os.path.join(path, 'temp_model')
+        self.temp_model_path = os.path.join(path, 'temp_model_'+str(torch.cuda.current_device()))
 
     def train_model(self,
                     max_iter_num=None,

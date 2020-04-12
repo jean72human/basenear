@@ -8,6 +8,7 @@ from datetime import datetime
 from abc import abstractmethod
 from random import randrange
 import torch
+from copy import deepcopy
 
 from autokeras.bayesian import BayesianOptimizer, SearchTree, contain
 from autokeras.greedy import GreedyOptimizer
@@ -181,6 +182,7 @@ class Searcher:
         #    proc.start()             
         for proc in processes:
             proc.join()
+        
         while not mpq.empty():
             metric_value,loss,model_id,other_info = mpq.get()
             self.add_model(metric_value, loss, model_id)
@@ -193,16 +195,16 @@ class Searcher:
         try:
             with torch.cuda.device(device):
                 if torch.cuda.current_device() == device:
+                    print("training on device ",device)
                     metric_value, loss, graph = train(None, graph, train_data, test_data, self.trainer_args,
                                               self.metric, self.loss, self.verbose, self.path)
+                    if metric_value is not None:
+                        self.write_graph(graph, model_id)
+                        mpq.put((metric_value, loss, model_id, other_info))
+
                 else:
                     print("Devices do not match")
 
-            if metric_value is not None:
-                self.write_graph(graph,model_id)
-                mpq.put((metric_value,loss,model_id,other_info))
-                #self.add_model(metric_value, loss, graph, model_id)
-                #self.update(other_info, model_id, graph, metric_value)
 
         except TimeoutError as e:
             raise TimeoutError from e
@@ -357,7 +359,7 @@ class ParralelSearcher(Searcher):
         if t_min is None:
             t_min = Constant.T_MIN
         self.optimizer = BayesianOptimizer(self, t_min, metric)
-        self.std_op = BayesianOptimizer(self, t_min, metric)
+        self.std_op = None
         
         
     def generate(self, multiprocessing_queue):
@@ -374,6 +376,7 @@ class ParralelSearcher(Searcher):
 
         """
         returns = []
+        self.std_op = deepcopy(self.optimizer)
         to_be_added = max(self.n_parralel - len(self.training_queue),0)
         first_was_generated = False
         
